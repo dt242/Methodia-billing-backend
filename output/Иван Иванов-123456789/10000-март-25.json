@@ -1,0 +1,18 @@
+{
+  "documentDate" : "2026-07-10T14:05:57.519537900Z",
+  "documentNumber" : "10000",
+  "consumer" : "Иван Иванов",
+  "reference" : "123456789",
+  "targetMonth" : "2025-03",
+  "totalAmount" : 18.82,
+  "lines" : [ {
+    "index" : 1,
+    "quantity" : 150.500,
+    "lineStart" : "2025-02-28T21:59:59Z",
+    "lineEnd" : "2025-03-31T20:59:59Z",
+    "product" : "gas",
+    "price" : 0.125,
+    "priceList" : 1,
+    "amount" : 18.82
+  } ]
+}
