@@ -1,13 +1,11 @@
 package com.example.billing.service;
 
-import com.example.billing.model.Price;
-import com.example.billing.model.Product;
-import com.example.billing.model.Reading;
-import com.example.billing.model.User;
+import com.example.billing.model.*;
 import com.example.billing.repository.PriceRepository;
 import com.example.billing.repository.ReadingRepository;
 import com.example.billing.repository.UserRepository;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,11 +23,13 @@ public class CsvParserService {
     private final UserRepository userRepository;
     private final ReadingRepository readingRepository;
     private final PriceRepository priceRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public CsvParserService(UserRepository userRepository, ReadingRepository readingRepository, PriceRepository priceRepository) {
+    public CsvParserService(UserRepository userRepository, ReadingRepository readingRepository, PriceRepository priceRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.readingRepository = readingRepository;
         this.priceRepository = priceRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional
@@ -37,9 +37,24 @@ public class CsvParserService {
         try (BufferedReader reader = getReader("data/users.csv")) {
             List<User> users = reader.lines().map(line -> {
                 String[] parts = line.split(",");
-                return new User(parts[0].trim(), parts[1].trim(), Integer.parseInt(parts[2].trim()));
+                String reference = parts[1].trim();
+                String encodedPassword = passwordEncoder.encode(reference);
+
+                return new User(
+                        parts[0].trim(),
+                        reference,
+                        Integer.parseInt(parts[2].trim()),
+                        encodedPassword,
+                        Role.CLIENT
+                );
             }).toList();
             userRepository.saveAll(users);
+
+            if (userRepository.findByReference("ADMIN-1").isEmpty()) {
+                User admin = new User("System Admin", "ADMIN-1", 0,
+                        passwordEncoder.encode("admin123"), Role.ADMIN);
+                userRepository.save(admin);
+            }
         } catch (Exception e) {
             throw new RuntimeException("Failed to import users", e);
         }
