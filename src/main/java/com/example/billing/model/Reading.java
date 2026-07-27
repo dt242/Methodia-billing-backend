@@ -40,13 +40,18 @@ public class Reading {
     @Column(name = "self_reported", nullable = false)
     private boolean selfReported;
 
-    public Reading(User user, Product product, OffsetDateTime dateTime, BigDecimal lastReading, boolean selfReported) {
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ReadingStatus status;
+
+    public Reading(User user, Product product, OffsetDateTime dateTime, BigDecimal lastReading, boolean selfReported, ReadingStatus status) {
         this.id = generateUuid();
         this.user = user;
         this.product = product;
         this.dateTime = dateTime;
         this.lastReading = lastReading;
         this.selfReported = selfReported;
+        this.status = status;
     }
 
     public static String generateUuid() {
