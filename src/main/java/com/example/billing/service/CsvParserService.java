@@ -1,11 +1,7 @@
 package com.example.billing.service;
 
 import com.example.billing.exception.InvalidDataException;
-import com.example.billing.model.Price;
-import com.example.billing.model.Product;
-import com.example.billing.model.Reading;
-import com.example.billing.model.Role;
-import com.example.billing.model.User;
+import com.example.billing.model.*;
 import com.example.billing.repository.PriceRepository;
 import com.example.billing.repository.ReadingRepository;
 import com.example.billing.repository.UserRepository;
@@ -93,7 +89,8 @@ public class CsvParserService {
                         Product.valueOf(parts[1].trim().toUpperCase()),
                         OffsetDateTime.parse(parts[2].trim()),
                         new BigDecimal(parts[3].trim()),
-                        false
+                        false,
+                        ReadingStatus.VALIDATED
                 );
             }).toList();
             readingRepository.saveAll(readings);
