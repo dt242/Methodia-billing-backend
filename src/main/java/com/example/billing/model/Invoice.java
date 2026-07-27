@@ -41,6 +41,9 @@ public class Invoice {
     @Column(nullable = false)
     private boolean paid = false;
 
+    @Column(name = "requires_manual_check", nullable = false)
+    private boolean requiresManualCheck = false;
+
     public static String generateUuid() {
         return UUID.randomUUID().toString().replace("-", "");
     }
