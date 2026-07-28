@@ -3,11 +3,7 @@ package com.example.billing.service;
 import com.example.billing.distribution.service.ProportionalDistributionService;
 import com.example.billing.exception.InvalidDataException;
 import com.example.billing.exception.ResourceNotFoundException;
-import com.example.billing.model.Invoice;
-import com.example.billing.model.Line;
-import com.example.billing.model.Product;
-import com.example.billing.model.Reading;
-import com.example.billing.model.User;
+import com.example.billing.model.*;
 import com.example.billing.repository.InvoiceRepository;
 import com.example.billing.repository.LineRepository;
 import com.example.billing.repository.PriceRepository;
@@ -49,11 +45,11 @@ public class InvoiceService {
         User user = userRepository.findByReference(userReference)
                 .orElseThrow(() -> new ResourceNotFoundException("Потребител с референция " + userReference + " не е намерен!"));
 
-        List<Reading> readings = readingRepository.findByUserAndProductOrderByDateTimeAsc(user, product);
+        List<Reading> readings = readingRepository.findByUserAndProductAndStatusOrderByDateTimeAsc(user, product, ReadingStatus.VALIDATED);
         if (readings.size() < 2) {
             throw new InvalidDataException("Няма достатъчно показания за този потребител, за да се изчисли консумацията.");
         }
-        Reading startReading = readings.get(0);
+        Reading startReading = readings.get(readings.size() - 2);
         Reading endReading = readings.get(readings.size() - 1);
 
         var prices = priceRepository.findByProductAndPriceListOrderByStartDateAsc(product, user.getPriceListId());

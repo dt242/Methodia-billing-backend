@@ -9,6 +9,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface ReadingRepository extends JpaRepository<Reading, String> {
-    List<Reading> findByUserAndProductOrderByDateTimeAsc(User user, Product product);
     List<Reading> findByStatusOrderByDateTimeAsc(ReadingStatus status);
+    List<Reading> findByUserAndProductAndStatusOrderByDateTimeAsc(User user, Product product, ReadingStatus status);
 }

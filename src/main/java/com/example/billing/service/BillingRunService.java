@@ -77,8 +77,7 @@ public class BillingRunService {
     }
 
     private void processSingleClient(User client) {
-        List<Reading> readings = readingRepository.findByUserAndProductOrderByDateTimeAsc(client, Product.GAS);
-
+        List<Reading> readings = readingRepository.findByUserAndProductAndStatusOrderByDateTimeAsc(client, Product.GAS, ReadingStatus.VALIDATED);
         if (readings.size() < 2) return;
 
         if (readings.size() >= 3) {
