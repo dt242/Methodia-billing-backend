@@ -20,7 +20,7 @@ public class Reading {
     @Column(length = 32, nullable = false, unique = true)
     private String id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
