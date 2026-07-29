@@ -45,6 +45,7 @@ public class InvoiceService {
         List<Price> currentPrices = priceRepository.findAll();
         return generateInvoice(userReference, product, currentPrices);
     }
+
     @Transactional
     public Invoice generateInvoice(String userReference, Product product, List<Price> frozenPrices) {
         User user = userRepository.findByReference(userReference)
@@ -57,12 +58,18 @@ public class InvoiceService {
         Reading startReading = readings.get(readings.size() - 2);
         Reading endReading = readings.get(readings.size() - 1);
 
+        return generateInvoice(user, startReading, endReading, frozenPrices);
+    }
+
+    @Transactional
+    public Invoice generateInvoice(User user, Reading startReading, Reading endReading, List<Price> frozenPrices) {
+        // Защита срещу двойно фактуриране
         if (endReading.isInvoiced()) {
             throw new InvalidDataException("Последният отчет за този клиент вече е фактуриран.");
         }
 
         List<Price> prices = frozenPrices.stream()
-                .filter(p -> p.getProduct() == product && p.getTariffCode().equals(user.getTariffCode()))
+                .filter(p -> p.getProduct() == endReading.getProduct() && p.getTariffCode().equals(user.getTariffCode()))
                 .sorted(java.util.Comparator.comparing(Price::getStartDate))
                 .toList();
 

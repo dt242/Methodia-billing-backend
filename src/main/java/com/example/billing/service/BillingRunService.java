@@ -66,7 +66,7 @@ public class BillingRunService {
                 run.setStatus(BillingStatus.IN_PROGRESS);
 
                 try {
-                    processSingleClient(client, frozenPrices);
+                    processSingleClient(client, frozenPrices, run.getBillingMonth(), run.getBillingYear());
                 } catch (Exception e) {
                     logError(ErrorSeverity.ERROR, "Грешка при обработка: " + e.getMessage(), client.getReference(), "BillingRun");
                 }
@@ -82,24 +82,37 @@ public class BillingRunService {
         }
     }
 
-    private void processSingleClient(User client, List<Price> frozenPrices) {
+    private void processSingleClient(User client, List<Price> frozenPrices, int targetMonth, int targetYear) {
         List<Reading> readings = readingRepository.findByUserAndProductAndStatusOrderByDateTimeAsc(client, Product.GAS, ReadingStatus.VALIDATED);
+
         if (readings.size() < 2) return;
 
-        Reading latestReading = readings.get(readings.size() - 1);
-        if (latestReading.isInvoiced()) {
+        int targetIndex = -1;
+        for (int i = readings.size() - 1; i >= 0; i--) {
+            OffsetDateTime dt = readings.get(i).getDateTime();
+            if (dt.getMonthValue() == targetMonth && dt.getYear() == targetYear) {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        if (targetIndex < 1) {
             return;
         }
 
-        if (readings.size() >= 3) {
-            Reading r1 = readings.get(readings.size() - 3);
-            Reading r2 = readings.get(readings.size() - 2);
-            Reading r3 = readings.get(readings.size() - 1);
+        Reading endReading = readings.get(targetIndex);
+        if (endReading.isInvoiced()) {
+            return;
+        }
 
-            BigDecimal previousConsumption = r2.getLastReading().subtract(r1.getLastReading());
-            BigDecimal currentConsumption = r3.getLastReading().subtract(r2.getLastReading());
+        Reading startReading = readings.get(targetIndex - 1);
 
-            boolean needsManualCheck = false;
+        boolean needsManualCheck = false;
+        if (targetIndex >= 2) {
+            Reading previousStartReading = readings.get(targetIndex - 2);
+
+            BigDecimal previousConsumption = startReading.getLastReading().subtract(previousStartReading.getLastReading());
+            BigDecimal currentConsumption = endReading.getLastReading().subtract(startReading.getLastReading());
 
             if (previousConsumption.compareTo(BigDecimal.ZERO) > 0) {
                 BigDecimal difference = currentConsumption.subtract(previousConsumption).abs();
@@ -111,14 +124,12 @@ public class BillingRunService {
                             + previousConsumption + ", Текущо: " + currentConsumption, client.getReference(), "Validation");
                 }
             }
+        }
 
-            Invoice invoice = invoiceService.generateInvoice(client.getReference(), Product.GAS, frozenPrices);
-            if (needsManualCheck) {
-                invoice.setRequiresManualCheck(true);
-                invoiceRepository.save(invoice);
-            }
-        } else {
-            invoiceService.generateInvoice(client.getReference(), Product.GAS, frozenPrices);
+        Invoice invoice = invoiceService.generateInvoice(client, startReading, endReading, frozenPrices);
+        if (needsManualCheck) {
+            invoice.setRequiresManualCheck(true);
+            invoiceRepository.save(invoice);
         }
     }
 
