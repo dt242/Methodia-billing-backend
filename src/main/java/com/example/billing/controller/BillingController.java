@@ -29,9 +29,4 @@ public class BillingController {
         Invoice invoice = invoiceService.generateInvoice(request.reference(), request.product());
         return ResponseEntity.status(HttpStatus.CREATED).body(invoice);
     }
-
-    @GetMapping("/invoices")
-    public ResponseEntity<List<Invoice>> getAllInvoices() {
-        return ResponseEntity.ok(invoiceRepository.findAll());
-    }
 }

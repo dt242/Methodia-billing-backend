@@ -3,7 +3,12 @@ package com.example.billing.controller;
 import com.example.billing.exception.ResourceNotFoundException;
 import com.example.billing.model.Invoice;
 import com.example.billing.repository.InvoiceRepository;
+import com.example.billing.service.AuditService;
 import com.example.billing.service.PdfGenerationService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -12,6 +17,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.OffsetDateTime;
+
 @RestController
 @RequestMapping("/api/invoices")
 @CrossOrigin(origins = "*")
@@ -19,10 +26,26 @@ public class InvoiceController {
 
     private final InvoiceRepository invoiceRepository;
     private final PdfGenerationService pdfGenerationService;
+    private final AuditService auditService;
 
-    public InvoiceController(InvoiceRepository invoiceRepository, PdfGenerationService pdfGenerationService) {
+    public InvoiceController(InvoiceRepository invoiceRepository, PdfGenerationService pdfGenerationService, AuditService auditService) {
         this.invoiceRepository = invoiceRepository;
         this.pdfGenerationService = pdfGenerationService;
+        this.auditService = auditService;
+    }
+
+    @GetMapping
+    public ResponseEntity<Page<Invoice>> getInvoices(
+            @RequestParam(required = false) String invoiceNumber,
+            @RequestParam(required = false) String customerName,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endDate,
+            @RequestParam(required = false) Boolean isPaid,
+            @PageableDefault(size = 20, sort = "dateTime") Pageable pageable) {
+
+        Page<Invoice> invoices = invoiceRepository.findWithFilters(invoiceNumber, customerName, startDate, endDate, isPaid, pageable);
+        auditService.logAction("Invoices", "Admin viewed invoices list with filters");
+        return ResponseEntity.ok(invoices);
     }
 
     @GetMapping("/{id}/pdf")
