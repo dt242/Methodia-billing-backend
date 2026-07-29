@@ -6,6 +6,7 @@ import com.example.billing.model.ReadingStatus;
 import com.example.billing.model.User;
 import com.example.billing.repository.ReadingRepository;
 import com.example.billing.repository.UserRepository;
+import com.example.billing.service.AuditService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -19,10 +20,12 @@ public class ClientReadingController {
 
     private final ReadingRepository readingRepository;
     private final UserRepository userRepository;
+    private final AuditService auditService;
 
-    public ClientReadingController(ReadingRepository readingRepository, UserRepository userRepository) {
+    public ClientReadingController(ReadingRepository readingRepository, UserRepository userRepository, AuditService auditService) {
         this.readingRepository = readingRepository;
         this.userRepository = userRepository;
+        this.auditService = auditService;
     }
 
     @PostMapping
@@ -43,6 +46,7 @@ public class ClientReadingController {
         );
 
         readingRepository.save(reading);
+        auditService.logAction("Usage Data", "Client submitted a self-report for product: " + request.product());
         return ResponseEntity.ok("Самоотчетът е изпратен успешно и чака одобрение от администратор.");
     }
 }

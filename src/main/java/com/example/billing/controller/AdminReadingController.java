@@ -4,6 +4,7 @@ import com.example.billing.exception.ResourceNotFoundException;
 import com.example.billing.model.Reading;
 import com.example.billing.model.ReadingStatus;
 import com.example.billing.repository.ReadingRepository;
+import com.example.billing.service.AuditService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,9 +16,12 @@ import java.util.List;
 public class AdminReadingController {
 
     private final ReadingRepository readingRepository;
+    private final AuditService auditService;
 
-    public AdminReadingController(ReadingRepository readingRepository) {
+
+    public AdminReadingController(ReadingRepository readingRepository, AuditService auditService) {
         this.readingRepository = readingRepository;
+        this.auditService = auditService;
     }
 
     @GetMapping("/pending")
@@ -33,6 +37,7 @@ public class AdminReadingController {
 
         reading.setStatus(ReadingStatus.VALIDATED);
         readingRepository.save(reading);
+        auditService.logAction("Usage Data", "Approved reading with ID: " + id);
         return ResponseEntity.ok("Отчетът е успешно валидиран.");
     }
 
@@ -43,6 +48,7 @@ public class AdminReadingController {
 
         reading.setStatus(ReadingStatus.REJECTED);
         readingRepository.save(reading);
+        auditService.logAction("Usage Data", "Rejected reading with ID: " + id);
         return ResponseEntity.ok("Отчетът е отхвърлен.");
     }
 }
