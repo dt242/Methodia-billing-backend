@@ -38,4 +38,11 @@ public class BillingRunController {
         auditService.logAction("Billing Run", "Resumed current Billing Run");
         return ResponseEntity.ok("Billing Run процесът е възобновен успешно.");
     }
+
+    @PostMapping("/restart")
+    public ResponseEntity<String> restartRun(@RequestParam int month, @RequestParam int year) {
+        billingRunService.restartBillingRun(month, year);
+        auditService.logAction("Billing Run", "Restarted Billing Run for " + month + "/" + year);
+        return ResponseEntity.ok("Billing Run процесът е рестартиран успешно.");
+    }
 }

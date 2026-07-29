@@ -1,5 +1,6 @@
 package com.example.billing.service;
 
+import com.example.billing.exception.InvalidDataException;
 import com.example.billing.model.*;
 import com.example.billing.repository.*;
 import org.springframework.scheduling.annotation.Async;
@@ -37,8 +38,44 @@ public class BillingRunService {
 
     @Async
     public void startBillingRun(int month, int year) {
+        if (billingRunRepository.findByBillingMonthAndBillingYear(month, year).isPresent()) {
+            throw new InvalidDataException("Вече съществува Billing Run за този период. Използвайте Restart, ако искате да го пуснете отново.");
+        }
+
         BillingRun run = new BillingRun(month, year);
         billingRunRepository.save(run);
+        isPaused.set(false);
+
+        List<User> clients = userRepository.findAll().stream()
+                .filter(u -> u.getRole() == Role.CLIENT)
+                .toList();
+
+        List<Price> frozenPrices = priceRepository.findAll();
+
+        if (frozenPrices.isEmpty() || clients.isEmpty()) {
+            run.setStatus(BillingStatus.FAILED);
+            run.setEndTime(OffsetDateTime.now());
+            billingRunRepository.save(run);
+            logError(ErrorSeverity.CRITICAL, "Липсват клиенти или тарифи за стартиране на процеса.", null, "BillingRun");
+            return;
+        }
+
+        processClients(clients, run, frozenPrices);
+    }
+
+    @Async
+    public void restartBillingRun(int month, int year) {
+        BillingRun run = billingRunRepository.findByBillingMonthAndBillingYear(month, year)
+                .orElseThrow(() -> new InvalidDataException("Няма съществуващ процес за " + month + "/" + year + ", който да бъде рестартиран."));
+
+        if (run.getStatus() == BillingStatus.IN_PROGRESS) {
+            throw new InvalidDataException("Процесът вече се изпълнява в момента.");
+        }
+
+        run.setStatus(BillingStatus.IN_PROGRESS);
+        run.setEndTime(null);
+        billingRunRepository.save(run);
+
         isPaused.set(false);
 
         List<User> clients = userRepository.findAll().stream()
