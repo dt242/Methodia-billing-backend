@@ -57,6 +57,10 @@ public class InvoiceService {
         Reading startReading = readings.get(readings.size() - 2);
         Reading endReading = readings.get(readings.size() - 1);
 
+        if (endReading.isInvoiced()) {
+            throw new InvalidDataException("Последният отчет за този клиент вече е фактуриран.");
+        }
+
         List<Price> prices = frozenPrices.stream()
                 .filter(p -> p.getProduct() == product && p.getTariffCode().equals(user.getTariffCode()))
                 .sorted(java.util.Comparator.comparing(Price::getStartDate))
@@ -84,6 +88,8 @@ public class InvoiceService {
             line.setInvoice(savedInvoice);
         }
         lineRepository.saveAll(calculatedLines);
+        endReading.setInvoiced(true);
+        readingRepository.save(endReading);
 
         return savedInvoice;
     }

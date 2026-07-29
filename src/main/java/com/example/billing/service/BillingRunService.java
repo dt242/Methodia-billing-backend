@@ -86,6 +86,11 @@ public class BillingRunService {
         List<Reading> readings = readingRepository.findByUserAndProductAndStatusOrderByDateTimeAsc(client, Product.GAS, ReadingStatus.VALIDATED);
         if (readings.size() < 2) return;
 
+        Reading latestReading = readings.get(readings.size() - 1);
+        if (latestReading.isInvoiced()) {
+            return;
+        }
+
         if (readings.size() >= 3) {
             Reading r1 = readings.get(readings.size() - 3);
             Reading r2 = readings.get(readings.size() - 2);
