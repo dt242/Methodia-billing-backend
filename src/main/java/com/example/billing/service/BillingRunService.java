@@ -15,6 +15,7 @@ public class BillingRunService {
 
     private final UserRepository userRepository;
     private final ReadingRepository readingRepository;
+    private final PriceRepository priceRepository;
     private final InvoiceService invoiceService;
     private final BillingRunRepository billingRunRepository;
     private final ErrorLogRepository errorLogRepository;
@@ -22,10 +23,11 @@ public class BillingRunService {
     private final AtomicBoolean isPaused = new AtomicBoolean(false);
 
     public BillingRunService(UserRepository userRepository, ReadingRepository readingRepository,
-                             InvoiceService invoiceService, BillingRunRepository billingRunRepository,
+                             PriceRepository priceRepository, InvoiceService invoiceService, BillingRunRepository billingRunRepository,
                              ErrorLogRepository errorLogRepository, InvoiceRepository invoiceRepository) {
         this.userRepository = userRepository;
         this.readingRepository = readingRepository;
+        this.priceRepository = priceRepository;
         this.invoiceService = invoiceService;
         this.billingRunRepository = billingRunRepository;
         this.errorLogRepository = errorLogRepository;
@@ -41,14 +43,16 @@ public class BillingRunService {
                 .filter(u -> u.getRole() == Role.CLIENT)
                 .toList();
 
-        new Thread(() -> processClients(clients, run)).start();
+        List<Price> frozenPrices = priceRepository.findAll();
+
+        new Thread(() -> processClients(clients, run, frozenPrices)).start();
     }
 
     public void pauseBillingRun() {
         isPaused.set(true);
     }
 
-    private void processClients(List<User> clients, BillingRun run) {
+    private void processClients(List<User> clients, BillingRun run, List<Price> frozenPrices) {
         try {
             for (User client : clients) {
                 while (isPaused.get()) {
@@ -60,7 +64,7 @@ public class BillingRunService {
                 run.setStatus(BillingStatus.IN_PROGRESS);
 
                 try {
-                    processSingleClient(client);
+                    processSingleClient(client, frozenPrices);
                 } catch (Exception e) {
                     logError(ErrorSeverity.ERROR, "Грешка при обработка: " + e.getMessage(), client.getReference(), "BillingRun");
                 }
@@ -76,7 +80,7 @@ public class BillingRunService {
         }
     }
 
-    private void processSingleClient(User client) {
+    private void processSingleClient(User client, List<Price> frozenPrices) {
         List<Reading> readings = readingRepository.findByUserAndProductAndStatusOrderByDateTimeAsc(client, Product.GAS, ReadingStatus.VALIDATED);
         if (readings.size() < 2) return;
 
@@ -101,14 +105,13 @@ public class BillingRunService {
                 }
             }
 
-            Invoice invoice = invoiceService.generateInvoice(client.getReference(), Product.GAS);
-
+            Invoice invoice = invoiceService.generateInvoice(client.getReference(), Product.GAS, frozenPrices);
             if (needsManualCheck) {
                 invoice.setRequiresManualCheck(true);
                 invoiceRepository.save(invoice);
             }
         } else {
-            invoiceService.generateInvoice(client.getReference(), Product.GAS);
+            invoiceService.generateInvoice(client.getReference(), Product.GAS, frozenPrices);
         }
     }
 

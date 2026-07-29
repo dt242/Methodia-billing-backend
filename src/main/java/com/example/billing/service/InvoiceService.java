@@ -42,6 +42,11 @@ public class InvoiceService {
 
     @Transactional
     public Invoice generateInvoice(String userReference, Product product) {
+        List<Price> currentPrices = priceRepository.findAll();
+        return generateInvoice(userReference, product, currentPrices);
+    }
+    @Transactional
+    public Invoice generateInvoice(String userReference, Product product, List<Price> frozenPrices) {
         User user = userRepository.findByReference(userReference)
                 .orElseThrow(() -> new ResourceNotFoundException("Потребител с референция " + userReference + " не е намерен!"));
 
@@ -52,7 +57,10 @@ public class InvoiceService {
         Reading startReading = readings.get(readings.size() - 2);
         Reading endReading = readings.get(readings.size() - 1);
 
-        var prices = priceRepository.findByProductAndPriceListOrderByStartDateAsc(product, user.getPriceListId());
+        List<Price> prices = frozenPrices.stream()
+                .filter(p -> p.getProduct() == product && p.getPriceList() == user.getPriceListId())
+                .sorted(java.util.Comparator.comparing(Price::getStartDate))
+                .toList();
 
         List<Line> calculatedLines = distributionService.distribute(startReading, endReading, prices);
 
