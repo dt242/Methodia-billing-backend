@@ -10,4 +10,5 @@ import java.util.List;
 public interface InvoiceRepository extends JpaRepository<Invoice, String> {
     long countByDateTimeBetween(OffsetDateTime start, OffsetDateTime end);
     List<Invoice> findByUserOrderByDateTimeDesc(User user);
+    List<Invoice> findByDateTimeBetween(OffsetDateTime start, OffsetDateTime end);
 }

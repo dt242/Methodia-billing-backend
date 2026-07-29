@@ -3,6 +3,7 @@ package com.example.billing.service;
 import com.example.billing.dto.ReportSummaryDto;
 import com.example.billing.model.BillingRun;
 import com.example.billing.model.ErrorLog;
+import com.example.billing.model.Invoice;
 import com.example.billing.repository.BillingRunRepository;
 import com.example.billing.repository.ErrorLogRepository;
 import com.example.billing.repository.InvoiceRepository;
@@ -42,5 +43,13 @@ public class ReportService {
 
         OffsetDateTime end = run.getEndTime() != null ? run.getEndTime() : OffsetDateTime.now();
         return errorLogRepository.findByTimestampBetween(run.getStartTime(), end);
+    }
+
+    public List<Invoice> getSuccessfulRecords(int month, int year) {
+        BillingRun run = billingRunRepository.findByBillingMonthAndBillingYear(month, year)
+                .orElseThrow(() -> new RuntimeException("Няма данни за Billing Run за този период."));
+
+        OffsetDateTime end = run.getEndTime() != null ? run.getEndTime() : OffsetDateTime.now();
+        return invoiceRepository.findByDateTimeBetween(run.getStartTime(), end);
     }
 }
