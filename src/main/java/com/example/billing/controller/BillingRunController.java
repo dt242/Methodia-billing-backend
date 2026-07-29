@@ -26,4 +26,10 @@ public class BillingRunController {
         billingRunService.pauseBillingRun();
         return ResponseEntity.ok("Сигнал за пауза е изпратен. Процесът ще спре след текущия клиент.");
     }
+
+    @PostMapping("/resume")
+    public ResponseEntity<String> resumeRun() {
+        billingRunService.resumeBillingRun();
+        return ResponseEntity.ok("Billing Run процесът е възобновен успешно.");
+    }
 }

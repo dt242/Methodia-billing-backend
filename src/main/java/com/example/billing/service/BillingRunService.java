@@ -116,4 +116,8 @@ public class BillingRunService {
         ErrorLog error = new ErrorLog(severity, description, customerId, process);
         errorLogRepository.save(error);
     }
+
+    public void resumeBillingRun() {
+        isPaused.set(false);
+    }
 }
