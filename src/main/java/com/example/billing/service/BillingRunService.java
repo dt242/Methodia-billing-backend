@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -177,5 +178,40 @@ public class BillingRunService {
 
     public void resumeBillingRun() {
         isPaused.set(false);
+    }
+
+    public void validatePreFlightConditions(int month, int year, boolean isRestart) {
+        if (!isRestart && billingRunRepository.findByBillingMonthAndBillingYear(month, year).isPresent()) {
+            throw new InvalidDataException("Вече съществува Billing Run за този период. Използвайте Restart.");
+        }
+
+        if (isRestart) {
+            BillingRun run = billingRunRepository.findByBillingMonthAndBillingYear(month, year)
+                    .orElseThrow(() -> new InvalidDataException("Няма съществуващ процес за рестартиране."));
+            if (run.getStatus() == BillingStatus.IN_PROGRESS) {
+                throw new InvalidDataException("Процесът вече се изпълнява в момента.");
+            }
+        }
+
+        long clientCount = userRepository.countByRole(Role.CLIENT);
+        if (clientCount == 0) {
+            throw new InvalidDataException("Няма регистрирани клиенти в системата.");
+        }
+
+        List<Price> allPrices = priceRepository.findAll();
+        if (allPrices.isEmpty()) {
+            throw new InvalidDataException("Няма заредени ценови листи в системата.");
+        }
+
+        LocalDate startOfMonth = LocalDate.of(year, month, 1);
+        LocalDate endOfMonth = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
+
+        boolean hasValidTariff = allPrices.stream().anyMatch(p ->
+                !p.getStartDate().isAfter(endOfMonth) && !p.getEndDate().isBefore(startOfMonth)
+        );
+
+        if (!hasValidTariff) {
+            throw new InvalidDataException("Не е намерен валиден тарифен план за период " + month + "/" + year + ". Моля, заредете актуални цени.");
+        }
     }
 }

@@ -20,6 +20,7 @@ public class BillingRunController {
 
     @PostMapping("/start")
     public ResponseEntity<String> startRun(@RequestParam int month, @RequestParam int year) {
+        billingRunService.validatePreFlightConditions(month, year, false);
         billingRunService.startBillingRun(month, year);
         auditService.logAction("Billing Run", "Started Billing Run for " + month + "/" + year);
         return ResponseEntity.ok("Billing Run стартира успешно във фонов режим.");
@@ -41,6 +42,7 @@ public class BillingRunController {
 
     @PostMapping("/restart")
     public ResponseEntity<String> restartRun(@RequestParam int month, @RequestParam int year) {
+        billingRunService.validatePreFlightConditions(month, year, true);
         billingRunService.restartBillingRun(month, year);
         auditService.logAction("Billing Run", "Restarted Billing Run for " + month + "/" + year);
         return ResponseEntity.ok("Billing Run процесът е рестартиран успешно.");
