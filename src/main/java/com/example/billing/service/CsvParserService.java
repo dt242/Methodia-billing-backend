@@ -21,8 +21,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.io.InputStream;
+import java.util.Set;
 
 @Service
 public class CsvParserService {
@@ -51,22 +53,44 @@ public class CsvParserService {
             fileImportRepository.save(fileImport);
 
             List<String[]> rows = parseFile(file);
-
             if (rows.isEmpty()) throw new InvalidDataException("Файлът е празен.");
 
             String[] headerLine = rows.get(0);
             validateHeaders(String.join(",", headerLine), "Customer Name", "Customer ID", "Tariff Code");
 
+            List<String> errors = new ArrayList<>();
             List<User> users = new ArrayList<>();
+
+            Set<String> seenReferences = new HashSet<>();
+
             for (int i = 1; i < rows.size(); i++) {
                 String[] parts = rows.get(i);
-                if (parts.length < 3) throw new InvalidDataException("Липсват данни на ред: " + (i + 1));
+                int rowNumber = i + 1;
 
+                if (parts.length < 3 || parts[0].isBlank() || parts[1].isBlank() || parts[2].isBlank()) {
+                    errors.add("Липсват задължителни данни или има празни полета на ред: " + rowNumber);
+                    continue;
+                }
+
+                String customerName = parts[0];
                 String reference = parts[1];
-                String encodedPassword = passwordEncoder.encode(reference);
                 String tariffCode = parts[2];
 
-                users.add(new User(parts[0], reference, tariffCode, encodedPassword, Role.CLIENT));
+                if (!seenReferences.add(reference) || userRepository.findByReference(reference).isPresent()) {
+                    errors.add("Дублиран Customer ID (" + reference + ") на ред: " + rowNumber);
+                    continue;
+                }
+
+                try {
+                    String encodedPassword = passwordEncoder.encode(reference);
+                    users.add(new User(customerName, reference, tariffCode, encodedPassword, Role.CLIENT));
+                } catch (Exception e) {
+                    errors.add("Неочаквана грешка при обработка на данните на ред: " + rowNumber);
+                }
+            }
+
+            if (!errors.isEmpty()) {
+                throw new InvalidDataException(errors);
             }
             userRepository.saveAll(users);
 
@@ -78,7 +102,7 @@ public class CsvParserService {
         } catch (InvalidDataException e) {
             throw e;
         } catch (Exception e) {
-            throw new InvalidDataException("Грешка при четене на файла с клиенти: " + e.getMessage());
+            throw new InvalidDataException("Системна грешка при четене на файла с клиенти: " + e.getMessage());
         }
     }
 
@@ -95,29 +119,49 @@ public class CsvParserService {
             String[] headerLine = rows.get(0);
             validateHeaders(String.join(",", headerLine), "Customer ID", "Product", "DateTime", "Consumption");
 
+            List<String> errors = new ArrayList<>();
             List<Reading> readings = new ArrayList<>();
+
             for (int i = 1; i < rows.size(); i++) {
                 String[] parts = rows.get(i);
-                if (parts.length < 4) throw new InvalidDataException("Липсват данни на ред: " + (i + 1));
-                String userRef = parts[0];
                 int rowNumber = i + 1;
-                User user = userRepository.findByReference(userRef)
-                        .orElseThrow(() -> new InvalidDataException("Ненамерен клиент с ID: " + userRef + " на ред: " + rowNumber));
 
-                readings.add(new Reading(
-                        user,
-                        Product.valueOf(parts[1].toUpperCase()),
-                        OffsetDateTime.parse(parts[2]),
-                        new BigDecimal(parts[3]),
-                        false,
-                        ReadingStatus.VALIDATED
-                ));
+                if (parts.length < 4) {
+                    errors.add("Липсват задължителни данни на ред: " + rowNumber);
+                    continue;
+                }
+
+                String userRef = parts[0];
+                var userOpt = userRepository.findByReference(userRef);
+
+                if (userOpt.isEmpty()) {
+                    errors.add("Ненамерен клиент с ID: " + userRef + " на ред: " + rowNumber);
+                    continue;
+                }
+
+                try {
+                    readings.add(new Reading(
+                            userOpt.get(),
+                            Product.valueOf(parts[1].toUpperCase()),
+                            OffsetDateTime.parse(parts[2]),
+                            new BigDecimal(parts[3]),
+                            false,
+                            ReadingStatus.VALIDATED
+                    ));
+                } catch (Exception e) {
+                    errors.add("Невалиден формат на данните на ред: " + rowNumber);
+                }
             }
+
+            if (!errors.isEmpty()) {
+                throw new InvalidDataException(errors);
+            }
+
             readingRepository.saveAll(readings);
         } catch (InvalidDataException e) {
             throw e;
         } catch (Exception e) {
-            throw new InvalidDataException("Грешка при четене на отчетите: " + e.getMessage());
+            throw new InvalidDataException("Системна грешка при четене на отчетите: " + e.getMessage());
         }
     }
 
@@ -134,27 +178,44 @@ public class CsvParserService {
             String[] headerLine = rows.get(0);
             validateHeaders(String.join(",", headerLine), "Tariff Code", "Price", "Valid From", "Valid To", "Product");
 
+            List<String> errors = new ArrayList<>();
             List<Price> prices = new ArrayList<>();
+
             for (int i = 1; i < rows.size(); i++) {
                 String[] parts = rows.get(i);
-                if (parts.length < 5) throw new InvalidDataException("Липсват данни на ред: " + (i + 1));
+                int rowNumber = i + 1;
 
-                Price price = new Price(
-                        Product.valueOf(parts[4].toUpperCase()),
-                        LocalDate.parse(parts[2]),
-                        LocalDate.parse(parts[3]),
-                        new BigDecimal(parts[1]),
-                        parts[0]
-                );
-                price.setFileImport(fileImport);
-                prices.add(price);
+                if (parts.length < 5) {
+                    errors.add("Липсват данни на ред: " + rowNumber);
+                    continue;
+                }
+
+                try {
+                    Price price = new Price(
+                            Product.valueOf(parts[4].toUpperCase()),
+                            LocalDate.parse(parts[2]),
+                            LocalDate.parse(parts[3]),
+                            new BigDecimal(parts[1]),
+                            parts[0]
+                    );
+                    price.setFileImport(fileImport);
+                    prices.add(price);
+                } catch (Exception e) {
+                    errors.add("Невалиден формат на цената или датите на ред: " + rowNumber);
+                }
             }
-            validateOverlappingPrices(prices);
+
+            errors.addAll(validateOverlappingPrices(prices));
+
+            if (!errors.isEmpty()) {
+                throw new InvalidDataException(errors);
+            }
+
             priceRepository.saveAll(prices);
         } catch (InvalidDataException e) {
             throw e;
         } catch (Exception e) {
-            throw new InvalidDataException("Грешка при четене на цените: " + e.getMessage());
+            throw new InvalidDataException("Системна грешка при четене на цените: " + e.getMessage());
         }
     }
 
@@ -218,7 +279,9 @@ public class CsvParserService {
         return rows;
     }
 
-    private void validateOverlappingPrices(List<Price> newPrices) {
+    private List<String> validateOverlappingPrices(List<Price> newPrices) {
+        List<String> errors = new ArrayList<>();
+
         for (int i = 0; i < newPrices.size(); i++) {
             for (int j = i + 1; j < newPrices.size(); j++) {
                 Price p1 = newPrices.get(i);
@@ -226,8 +289,7 @@ public class CsvParserService {
 
                 if (p1.getTariffCode().equals(p2.getTariffCode()) && p1.getProduct() == p2.getProduct()) {
                     if (!p1.getStartDate().isAfter(p2.getEndDate()) && !p1.getEndDate().isBefore(p2.getStartDate())) {
-                        throw new InvalidDataException("Overlapping Validity Period: Конфликт вътре във файла за тарифа "
-                                + p1.getTariffCode() + " (" + p1.getProduct() + ").");
+                        errors.add("Overlapping Validity Period: Конфликт вътре във файла за тарифа " + p1.getTariffCode());
                     }
                 }
             }
@@ -239,11 +301,11 @@ public class CsvParserService {
             for (Price existingPrice : existingPrices) {
                 if (newPrice.getTariffCode().equals(existingPrice.getTariffCode()) && newPrice.getProduct() == existingPrice.getProduct()) {
                     if (!newPrice.getStartDate().isAfter(existingPrice.getEndDate()) && !newPrice.getEndDate().isBefore(existingPrice.getStartDate())) {
-                        throw new InvalidDataException("Overlapping Validity Period: Конфликт със съществуваща тарифа в базата за "
-                                + newPrice.getTariffCode() + " (" + newPrice.getStartDate() + " до " + newPrice.getEndDate() + ").");
+                        errors.add("Overlapping Validity Period: Конфликт със съществуваща тарифа в базата за " + newPrice.getTariffCode());
                     }
                 }
             }
         }
+        return errors;
     }
 }
