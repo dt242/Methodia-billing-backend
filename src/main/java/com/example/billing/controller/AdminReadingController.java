@@ -51,4 +51,13 @@ public class AdminReadingController {
         auditService.logAction("Usage Data", "Rejected reading with ID: " + id);
         return ResponseEntity.ok("Отчетът е отхвърлен.");
     }
+
+    @GetMapping
+    public ResponseEntity<List<Reading>> getAllReadings(
+            @RequestParam(required = false) ReadingStatus status) {
+
+        List<Reading> readings = readingRepository.findWithFilters(status);
+        auditService.logAction("Usage Data", "Admin viewed all usage data readings");
+        return ResponseEntity.ok(readings);
+    }
 }
