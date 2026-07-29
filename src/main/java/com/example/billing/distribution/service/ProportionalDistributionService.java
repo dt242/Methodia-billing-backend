@@ -68,25 +68,25 @@ public class ProportionalDistributionService {
         for (int i = 0; i < periods.size(); i++) {
             PeriodData p = periods.get(i);
             Line line = new Line();
-            line.setStartDateTime(p.displayStart);
-            line.setEndDateTime(p.displayEnd);
+            line.setStartDateTime(p.displayStart());
+            line.setEndDateTime(p.displayEnd());
             line.setProduct(startReading.getProduct());
-            line.setPrice(p.price.getPrice());
-            line.setPriceList(p.price.getPriceList());
+            line.setPrice(p.price().getPrice());
+            line.setTariffCode(p.price().getTariffCode());
 
             BigDecimal currentQuantity;
 
             if (i == periods.size() - 1) {
                 currentQuantity = totalQuantity.subtract(distributedQuantity);
             } else {
-                BigDecimal ratio = BigDecimal.valueOf(p.overlapDays)
+                BigDecimal ratio = BigDecimal.valueOf(p.overlapDays())
                         .divide(BigDecimal.valueOf(totalDays), 2, RoundingMode.UP);
                 currentQuantity = totalQuantity.multiply(ratio).setScale(2, RoundingMode.UP);
                 distributedQuantity = distributedQuantity.add(currentQuantity);
             }
 
             line.setQuantity(currentQuantity);
-            line.setAmount(currentQuantity.multiply(p.price.getPrice()).setScale(2, RoundingMode.HALF_UP));
+            line.setAmount(currentQuantity.multiply(p.price().getPrice()).setScale(2, RoundingMode.HALF_UP));
             result.add(line);
         }
 

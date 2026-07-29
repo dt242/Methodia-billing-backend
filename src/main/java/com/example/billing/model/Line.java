@@ -39,8 +39,8 @@ public class Line {
     @Column(precision = 19, scale = 4, nullable = false)
     private BigDecimal price;
 
-    @Column(name = "price_list", nullable = false)
-    private int priceList;
+    @Column(name = "tariff_code", nullable = false)
+    private String tariffCode;
 
     @Column(precision = 19, scale = 2, nullable = false)
     private BigDecimal amount;
