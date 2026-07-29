@@ -4,6 +4,7 @@ import com.example.billing.exception.ResourceNotFoundException;
 import com.example.billing.model.Invoice;
 import com.example.billing.repository.InvoiceRepository;
 import com.example.billing.service.AuditService;
+import com.example.billing.service.InvoiceService;
 import com.example.billing.service.PdfGenerationService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,11 +28,13 @@ public class InvoiceController {
     private final InvoiceRepository invoiceRepository;
     private final PdfGenerationService pdfGenerationService;
     private final AuditService auditService;
+    private final InvoiceService invoiceService;
 
-    public InvoiceController(InvoiceRepository invoiceRepository, PdfGenerationService pdfGenerationService, AuditService auditService) {
+    public InvoiceController(InvoiceRepository invoiceRepository, PdfGenerationService pdfGenerationService, AuditService auditService, InvoiceService invoiceService) {
         this.invoiceRepository = invoiceRepository;
         this.pdfGenerationService = pdfGenerationService;
         this.auditService = auditService;
+        this.invoiceService = invoiceService;
     }
 
     @GetMapping
@@ -67,5 +70,17 @@ public class InvoiceController {
         headers.setContentDispositionFormData("attachment", "invoice_" + invoice.getNumber() + ".pdf");
 
         return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+    }
+
+    @PostMapping("/{id}/regenerate")
+    public ResponseEntity<Invoice> regenerateInvoice(@PathVariable String id) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (!isAdmin) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        Invoice newInvoice = invoiceService.regenerateInvoice(id);
+        auditService.logAction("Invoices", "Regenerated invoice. Old ID: " + id + ", New ID: " + newInvoice.getId());
+        return ResponseEntity.ok(newInvoice);
     }
 }
