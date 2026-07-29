@@ -11,6 +11,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -20,6 +22,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.io.InputStream;
 
 @Service
 public class CsvParserService {
@@ -42,31 +45,29 @@ public class CsvParserService {
 
     @Transactional
     public void importUsers(MultipartFile file) {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
-
+        try {
             User uploadedBy = getAuthenticatedUser();
             FileImport fileImport = new FileImport(ImportType.USERS, file.getOriginalFilename(), uploadedBy, file.getBytes());
             fileImportRepository.save(fileImport);
 
-            String headerLine = reader.readLine();
-            validateHeaders(headerLine, "Customer Name", "Customer ID", "Tariff Code");
+            List<String[]> rows = parseFile(file);
 
-            List<User> users = reader.lines().map(line -> {
-                String[] parts = line.split(",");
-                if (parts.length < 3) throw new InvalidDataException("Липсват данни на ред: " + line);
+            if (rows.isEmpty()) throw new InvalidDataException("Файлът е празен.");
 
-                String reference = parts[1].trim();
+            String[] headerLine = rows.get(0);
+            validateHeaders(String.join(",", headerLine), "Customer Name", "Customer ID", "Tariff Code");
+
+            List<User> users = new ArrayList<>();
+            for (int i = 1; i < rows.size(); i++) {
+                String[] parts = rows.get(i);
+                if (parts.length < 3) throw new InvalidDataException("Липсват данни на ред: " + (i + 1));
+
+                String reference = parts[1];
                 String encodedPassword = passwordEncoder.encode(reference);
-                String tariffCode = parts[2].trim();
+                String tariffCode = parts[2];
 
-                return new User(
-                        parts[0].trim(),
-                        reference,
-                        tariffCode,
-                        encodedPassword,
-                        Role.CLIENT
-                );
-            }).toList();
+                users.add(new User(parts[0], reference, tariffCode, encodedPassword, Role.CLIENT));
+            }
             userRepository.saveAll(users);
 
             if (userRepository.findByReference("ADMIN-1").isEmpty()) {
@@ -83,32 +84,35 @@ public class CsvParserService {
 
     @Transactional
     public void importReadings(MultipartFile file) {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
-
+        try {
             User uploadedBy = getAuthenticatedUser();
             FileImport fileImport = new FileImport(ImportType.READINGS, file.getOriginalFilename(), uploadedBy, file.getBytes());
             fileImportRepository.save(fileImport);
 
-            String headerLine = reader.readLine();
-            validateHeaders(headerLine, "Customer ID", "Product", "DateTime", "Consumption");
+            List<String[]> rows = parseFile(file);
+            if (rows.isEmpty()) throw new InvalidDataException("Файлът е празен.");
 
-            List<Reading> readings = reader.lines().map(line -> {
-                String[] parts = line.split(",");
-                if (parts.length < 4) throw new InvalidDataException("Липсват данни на ред: " + line);
+            String[] headerLine = rows.get(0);
+            validateHeaders(String.join(",", headerLine), "Customer ID", "Product", "DateTime", "Consumption");
 
-                String userRef = parts[0].trim();
+            List<Reading> readings = new ArrayList<>();
+            for (int i = 1; i < rows.size(); i++) {
+                String[] parts = rows.get(i);
+                if (parts.length < 4) throw new InvalidDataException("Липсват данни на ред: " + (i + 1));
+                String userRef = parts[0];
+                int rowNumber = i + 1;
                 User user = userRepository.findByReference(userRef)
-                        .orElseThrow(() -> new InvalidDataException("Ненамерен клиент с ID: " + userRef));
+                        .orElseThrow(() -> new InvalidDataException("Ненамерен клиент с ID: " + userRef + " на ред: " + rowNumber));
 
-                return new Reading(
+                readings.add(new Reading(
                         user,
-                        Product.valueOf(parts[1].trim().toUpperCase()),
-                        OffsetDateTime.parse(parts[2].trim()),
-                        new BigDecimal(parts[3].trim()),
+                        Product.valueOf(parts[1].toUpperCase()),
+                        OffsetDateTime.parse(parts[2]),
+                        new BigDecimal(parts[3]),
                         false,
                         ReadingStatus.VALIDATED
-                );
-            }).toList();
+                ));
+            }
             readingRepository.saveAll(readings);
         } catch (InvalidDataException e) {
             throw e;
@@ -119,31 +123,32 @@ public class CsvParserService {
 
     @Transactional
     public void importPrices(MultipartFile file) {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
-
+        try {
             User uploadedBy = getAuthenticatedUser();
             FileImport fileImport = new FileImport(ImportType.PRICES, file.getOriginalFilename(), uploadedBy, file.getBytes());
             fileImport = fileImportRepository.save(fileImport);
 
-            String headerLine = reader.readLine();
-            validateHeaders(headerLine, "Tariff Code", "Price", "Valid From", "Valid To", "Product");
+            List<String[]> rows = parseFile(file);
+            if (rows.isEmpty()) throw new InvalidDataException("Файлът е празен.");
 
-            FileImport finalFileImport = fileImport;
-            List<Price> prices = reader.lines().map(line -> {
-                String[] parts = line.split(",");
-                if (parts.length < 5) throw new InvalidDataException("Липсват данни на ред: " + line);
+            String[] headerLine = rows.get(0);
+            validateHeaders(String.join(",", headerLine), "Tariff Code", "Price", "Valid From", "Valid To", "Product");
+
+            List<Price> prices = new ArrayList<>();
+            for (int i = 1; i < rows.size(); i++) {
+                String[] parts = rows.get(i);
+                if (parts.length < 5) throw new InvalidDataException("Липсват данни на ред: " + (i + 1));
 
                 Price price = new Price(
-                        Product.valueOf(parts[4].trim().toUpperCase()),
-                        LocalDate.parse(parts[2].trim()),
-                        LocalDate.parse(parts[3].trim()),
-                        new BigDecimal(parts[1].trim()),
-                        parts[0].trim()
+                        Product.valueOf(parts[4].toUpperCase()),
+                        LocalDate.parse(parts[2]),
+                        LocalDate.parse(parts[3]),
+                        new BigDecimal(parts[1]),
+                        parts[0]
                 );
-                price.setFileImport(finalFileImport);
-                return price;
-            }).toList();
-
+                price.setFileImport(fileImport);
+                prices.add(price);
+            }
             priceRepository.saveAll(prices);
         } catch (InvalidDataException e) {
             throw e;
@@ -174,5 +179,41 @@ public class CsvParserService {
         if (!missing.isEmpty()) {
             throw new InvalidDataException("Невалидна структура. Липсват задължителни колони: " + String.join(", ", missing));
         }
+    }
+
+    private List<String[]> parseFile(MultipartFile file) throws Exception {
+        List<String[]> rows = new ArrayList<>();
+        String filename = file.getOriginalFilename();
+
+        if (filename.toLowerCase().endsWith(".xlsx")) {
+            try (InputStream is = file.getInputStream();
+                 Workbook workbook = new XSSFWorkbook(is)) {
+
+                Sheet sheet = workbook.getSheetAt(0);
+                DataFormatter dataFormatter = new DataFormatter();
+
+                for (Row row : sheet) {
+                    List<String> rowData = new ArrayList<>();
+                    int lastCellNum = Math.max(row.getLastCellNum(), 0);
+                    for (int cn = 0; cn < lastCellNum; cn++) {
+                        Cell cell = row.getCell(cn, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+                        rowData.add(dataFormatter.formatCellValue(cell).trim());
+                    }
+                    rows.add(rowData.toArray(new String[0]));
+                }
+            }
+        } else {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] parts = line.split(",");
+                    for (int i = 0; i < parts.length; i++) {
+                        parts[i] = parts[i].trim();
+                    }
+                    rows.add(parts);
+                }
+            }
+        }
+        return rows;
     }
 }
