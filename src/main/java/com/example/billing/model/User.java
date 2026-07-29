@@ -36,6 +36,13 @@ public class User {
     @Column(nullable = false)
     private Role role;
 
+    @Column(nullable = false)
+    private boolean active = true;
+
+    public boolean isActive() {
+        return active;
+    }
+
     public User(String name, String reference, String tariffCode, String password, Role role) {
         this.id = generateUuid();
         this.name = name;
