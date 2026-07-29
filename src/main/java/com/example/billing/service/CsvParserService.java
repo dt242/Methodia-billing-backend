@@ -47,19 +47,14 @@ public class CsvParserService {
 
                 String reference = parts[1].trim();
                 String encodedPassword = passwordEncoder.encode(reference);
+                String tariffCode = parts[2].trim();
 
-                return new User(
-                        parts[0].trim(),
-                        reference,
-                        Integer.parseInt(parts[2].trim()),
-                        encodedPassword,
-                        Role.CLIENT
-                );
+                return new User(parts[0].trim(), reference, tariffCode, encodedPassword, Role.CLIENT);
             }).toList();
             userRepository.saveAll(users);
 
             if (userRepository.findByReference("ADMIN-1").isEmpty()) {
-                User admin = new User("System Admin", "ADMIN-1", 0,
+                User admin = new User("System Admin", "ADMIN-1", "N/A",
                         passwordEncoder.encode("admin123"), Role.ADMIN);
                 userRepository.save(admin);
             }
@@ -102,21 +97,21 @@ public class CsvParserService {
     }
 
     @Transactional
-    public void importPrices(MultipartFile file, int priceListId) {
+    public void importPrices(MultipartFile file) {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             String headerLine = reader.readLine();
-            validateHeaders(headerLine, "Product", "Valid From", "Valid To", "Price");
+            validateHeaders(headerLine, "Tariff Code", "Price", "Valid From", "Valid To", "Product");
 
             List<Price> prices = reader.lines().map(line -> {
                 String[] parts = line.split(",");
-                if (parts.length < 4) throw new InvalidDataException("Липсват данни на ред: " + line);
+                if (parts.length < 5) throw new InvalidDataException("Липсват данни на ред: " + line);
 
                 return new Price(
-                        Product.valueOf(parts[0].trim().toUpperCase()),
-                        LocalDate.parse(parts[1].trim()),
+                        Product.valueOf(parts[4].trim().toUpperCase()),
                         LocalDate.parse(parts[2].trim()),
-                        new BigDecimal(parts[3].trim()),
-                        priceListId
+                        LocalDate.parse(parts[3].trim()),
+                        new BigDecimal(parts[1].trim()),
+                        parts[0].trim()
                 );
             }).toList();
             priceRepository.saveAll(prices);

@@ -37,12 +37,10 @@ public class ImportController {
     }
 
     @PostMapping("/prices")
-    public ResponseEntity<String> importPrices(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("priceListId") int priceListId) {
+    public ResponseEntity<String> importPrices(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) throw new InvalidDataException("Файлът не може да бъде празен.");
-        csvParserService.importPrices(file, priceListId);
-        auditService.logAction("Tariff Plans", "Imported tariff prices for price list ID: " + priceListId);
+        csvParserService.importPrices(file);
+        auditService.logAction("Tariff Plans", "Imported tariff prices file: " + file.getOriginalFilename());
         return ResponseEntity.ok("Тарифите са успешно импортирани.");
     }
 }

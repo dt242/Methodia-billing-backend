@@ -58,7 +58,7 @@ public class InvoiceService {
         Reading endReading = readings.get(readings.size() - 1);
 
         List<Price> prices = frozenPrices.stream()
-                .filter(p -> p.getProduct() == product && p.getPriceList() == user.getPriceListId())
+                .filter(p -> p.getProduct() == product && p.getTariffCode().equals(user.getTariffCode()))
                 .sorted(java.util.Comparator.comparing(Price::getStartDate))
                 .toList();
 
