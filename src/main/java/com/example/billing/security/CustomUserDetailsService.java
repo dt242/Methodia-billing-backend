@@ -23,6 +23,9 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String reference) throws UsernameNotFoundException {
         User user = userRepository.findByReference(reference)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + reference));
+        if (!user.isActive()) {
+            throw new UsernameNotFoundException("User account is deactivated");
+        }
 
         return new org.springframework.security.core.userdetails.User(
                 user.getReference(),

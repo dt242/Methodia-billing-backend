@@ -33,20 +33,20 @@ public class Price {
     @Column(precision = 19, scale = 4, nullable = false)
     private BigDecimal price;
 
-    @Column(name = "price_list", nullable = false)
-    private int priceList;
+    @Column(name = "tariff_code", nullable = false)
+    private String tariffCode;
 
      @ManyToOne(fetch = FetchType.LAZY)
      @JoinColumn(name = "file_import_id")
      private FileImport fileImport;
 
-    public Price(Product product, LocalDate startDate, LocalDate endDate, BigDecimal price, int priceList) {
+    public Price(Product product, LocalDate startDate, LocalDate endDate, BigDecimal price, String tariffCode) {
         this.id = generateUuid();
         this.product = product;
         this.startDate = startDate;
         this.endDate = endDate;
         this.price = price;
-        this.priceList = priceList;
+        this.tariffCode = tariffCode;
     }
 
     public static String generateUuid() {

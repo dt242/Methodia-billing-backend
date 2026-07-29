@@ -42,6 +42,12 @@ public class InvoiceService {
 
     @Transactional
     public Invoice generateInvoice(String userReference, Product product) {
+        List<Price> currentPrices = priceRepository.findAll();
+        return generateInvoice(userReference, product, currentPrices);
+    }
+
+    @Transactional
+    public Invoice generateInvoice(String userReference, Product product, List<Price> frozenPrices) {
         User user = userRepository.findByReference(userReference)
                 .orElseThrow(() -> new ResourceNotFoundException("Потребител с референция " + userReference + " не е намерен!"));
 
@@ -52,7 +58,19 @@ public class InvoiceService {
         Reading startReading = readings.get(readings.size() - 2);
         Reading endReading = readings.get(readings.size() - 1);
 
-        var prices = priceRepository.findByProductAndPriceListOrderByStartDateAsc(product, user.getPriceListId());
+        return generateInvoice(user, startReading, endReading, frozenPrices);
+    }
+
+    @Transactional
+    public Invoice generateInvoice(User user, Reading startReading, Reading endReading, List<Price> frozenPrices) {
+        if (endReading.isInvoiced()) {
+            throw new InvalidDataException("Последният отчет за този клиент вече е фактуриран.");
+        }
+
+        List<Price> prices = frozenPrices.stream()
+                .filter(p -> p.getProduct() == endReading.getProduct() && p.getTariffCode().equals(user.getTariffCode()))
+                .sorted(java.util.Comparator.comparing(Price::getStartDate))
+                .toList();
 
         List<Line> calculatedLines = distributionService.distribute(startReading, endReading, prices);
 
@@ -76,7 +94,44 @@ public class InvoiceService {
             line.setInvoice(savedInvoice);
         }
         lineRepository.saveAll(calculatedLines);
+        endReading.setInvoiced(true);
+        readingRepository.save(endReading);
 
         return savedInvoice;
+    }
+
+    @Transactional
+    public Invoice regenerateInvoice(String invoiceId) {
+        Invoice oldInvoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Фактурата не е намерена."));
+
+        if (oldInvoice.getLines().isEmpty()) {
+            throw new InvalidDataException("Фактурата няма редове и не може да бъде прегенерирана.");
+        }
+
+        User user = oldInvoice.getUser();
+        Product product = oldInvoice.getLines().get(0).getProduct();
+        OffsetDateTime firstLineStart = oldInvoice.getLines().get(0).getStartDateTime();
+        OffsetDateTime lastLineEnd = oldInvoice.getLines().get(oldInvoice.getLines().size() - 1).getEndDateTime();
+
+        List<Reading> readings = readingRepository.findByUserAndProductAndStatusOrderByDateTimeAsc(user, product, ReadingStatus.VALIDATED);
+
+        Reading startReading = readings.stream()
+                .filter(r -> !r.getDateTime().isAfter(firstLineStart))
+                .reduce((a, b) -> b)
+                .orElseThrow(() -> new InvalidDataException("Не е намерен начален отчет за тази фактура."));
+
+        Reading endReading = readings.stream()
+                .filter(r -> !r.getDateTime().isBefore(lastLineEnd))
+                .findFirst()
+                .orElseThrow(() -> new InvalidDataException("Не е намерен краен отчет за тази фактура."));
+
+        endReading.setInvoiced(false);
+        readingRepository.save(endReading);
+        invoiceRepository.delete(oldInvoice);
+        invoiceRepository.flush();
+        List<Price> currentPrices = priceRepository.findAll();
+
+        return generateInvoice(user, startReading, endReading, currentPrices);
     }
 }

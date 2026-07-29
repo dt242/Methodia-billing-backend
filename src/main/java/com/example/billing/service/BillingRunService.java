@@ -1,11 +1,14 @@
 package com.example.billing.service;
 
+import com.example.billing.exception.InvalidDataException;
 import com.example.billing.model.*;
 import com.example.billing.repository.*;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -15,6 +18,7 @@ public class BillingRunService {
 
     private final UserRepository userRepository;
     private final ReadingRepository readingRepository;
+    private final PriceRepository priceRepository;
     private final InvoiceService invoiceService;
     private final BillingRunRepository billingRunRepository;
     private final ErrorLogRepository errorLogRepository;
@@ -22,17 +26,23 @@ public class BillingRunService {
     private final AtomicBoolean isPaused = new AtomicBoolean(false);
 
     public BillingRunService(UserRepository userRepository, ReadingRepository readingRepository,
-                             InvoiceService invoiceService, BillingRunRepository billingRunRepository,
+                             PriceRepository priceRepository, InvoiceService invoiceService, BillingRunRepository billingRunRepository,
                              ErrorLogRepository errorLogRepository, InvoiceRepository invoiceRepository) {
         this.userRepository = userRepository;
         this.readingRepository = readingRepository;
+        this.priceRepository = priceRepository;
         this.invoiceService = invoiceService;
         this.billingRunRepository = billingRunRepository;
         this.errorLogRepository = errorLogRepository;
         this.invoiceRepository = invoiceRepository;
     }
 
+    @Async
     public void startBillingRun(int month, int year) {
+        if (billingRunRepository.findByBillingMonthAndBillingYear(month, year).isPresent()) {
+            throw new InvalidDataException("Вече съществува Billing Run за този период. Използвайте Restart, ако искате да го пуснете отново.");
+        }
+
         BillingRun run = new BillingRun(month, year);
         billingRunRepository.save(run);
         isPaused.set(false);
@@ -41,14 +51,48 @@ public class BillingRunService {
                 .filter(u -> u.getRole() == Role.CLIENT)
                 .toList();
 
-        new Thread(() -> processClients(clients, run)).start();
+        List<Price> frozenPrices = priceRepository.findAll();
+
+        if (frozenPrices.isEmpty() || clients.isEmpty()) {
+            run.setStatus(BillingStatus.FAILED);
+            run.setEndTime(OffsetDateTime.now());
+            billingRunRepository.save(run);
+            logError(ErrorSeverity.CRITICAL, "Липсват клиенти или тарифи за стартиране на процеса.", null, "BillingRun");
+            return;
+        }
+
+        processClients(clients, run, frozenPrices);
+    }
+
+    @Async
+    public void restartBillingRun(int month, int year) {
+        BillingRun run = billingRunRepository.findByBillingMonthAndBillingYear(month, year)
+                .orElseThrow(() -> new InvalidDataException("Няма съществуващ процес за " + month + "/" + year + ", който да бъде рестартиран."));
+
+        if (run.getStatus() == BillingStatus.IN_PROGRESS) {
+            throw new InvalidDataException("Процесът вече се изпълнява в момента.");
+        }
+
+        run.setStatus(BillingStatus.IN_PROGRESS);
+        run.setEndTime(null);
+        billingRunRepository.save(run);
+
+        isPaused.set(false);
+
+        List<User> clients = userRepository.findAll().stream()
+                .filter(u -> u.getRole() == Role.CLIENT)
+                .toList();
+
+        List<Price> frozenPrices = priceRepository.findAll();
+
+        processClients(clients, run, frozenPrices);
     }
 
     public void pauseBillingRun() {
         isPaused.set(true);
     }
 
-    private void processClients(List<User> clients, BillingRun run) {
+    private void processClients(List<User> clients, BillingRun run, List<Price> frozenPrices) {
         try {
             for (User client : clients) {
                 while (isPaused.get()) {
@@ -60,7 +104,7 @@ public class BillingRunService {
                 run.setStatus(BillingStatus.IN_PROGRESS);
 
                 try {
-                    processSingleClient(client);
+                    processSingleClient(client, frozenPrices, run.getBillingMonth(), run.getBillingYear());
                 } catch (Exception e) {
                     logError(ErrorSeverity.ERROR, "Грешка при обработка: " + e.getMessage(), client.getReference(), "BillingRun");
                 }
@@ -76,19 +120,37 @@ public class BillingRunService {
         }
     }
 
-    private void processSingleClient(User client) {
+    private void processSingleClient(User client, List<Price> frozenPrices, int targetMonth, int targetYear) {
         List<Reading> readings = readingRepository.findByUserAndProductAndStatusOrderByDateTimeAsc(client, Product.GAS, ReadingStatus.VALIDATED);
+
         if (readings.size() < 2) return;
 
-        if (readings.size() >= 3) {
-            Reading r1 = readings.get(readings.size() - 3);
-            Reading r2 = readings.get(readings.size() - 2);
-            Reading r3 = readings.get(readings.size() - 1);
+        int targetIndex = -1;
+        for (int i = readings.size() - 1; i >= 0; i--) {
+            OffsetDateTime dt = readings.get(i).getDateTime();
+            if (dt.getMonthValue() == targetMonth && dt.getYear() == targetYear) {
+                targetIndex = i;
+                break;
+            }
+        }
 
-            BigDecimal previousConsumption = r2.getLastReading().subtract(r1.getLastReading());
-            BigDecimal currentConsumption = r3.getLastReading().subtract(r2.getLastReading());
+        if (targetIndex < 1) {
+            return;
+        }
 
-            boolean needsManualCheck = false;
+        Reading endReading = readings.get(targetIndex);
+        if (endReading.isInvoiced()) {
+            return;
+        }
+
+        Reading startReading = readings.get(targetIndex - 1);
+
+        boolean needsManualCheck = false;
+        if (targetIndex >= 2) {
+            Reading previousStartReading = readings.get(targetIndex - 2);
+
+            BigDecimal previousConsumption = startReading.getLastReading().subtract(previousStartReading.getLastReading());
+            BigDecimal currentConsumption = endReading.getLastReading().subtract(startReading.getLastReading());
 
             if (previousConsumption.compareTo(BigDecimal.ZERO) > 0) {
                 BigDecimal difference = currentConsumption.subtract(previousConsumption).abs();
@@ -100,20 +162,56 @@ public class BillingRunService {
                             + previousConsumption + ", Текущо: " + currentConsumption, client.getReference(), "Validation");
                 }
             }
+        }
 
-            Invoice invoice = invoiceService.generateInvoice(client.getReference(), Product.GAS);
-
-            if (needsManualCheck) {
-                invoice.setRequiresManualCheck(true);
-                invoiceRepository.save(invoice);
-            }
-        } else {
-            invoiceService.generateInvoice(client.getReference(), Product.GAS);
+        Invoice invoice = invoiceService.generateInvoice(client, startReading, endReading, frozenPrices);
+        if (needsManualCheck) {
+            invoice.setRequiresManualCheck(true);
+            invoiceRepository.save(invoice);
         }
     }
 
     private void logError(ErrorSeverity severity, String description, String customerId, String process) {
         ErrorLog error = new ErrorLog(severity, description, customerId, process);
         errorLogRepository.save(error);
+    }
+
+    public void resumeBillingRun() {
+        isPaused.set(false);
+    }
+
+    public void validatePreFlightConditions(int month, int year, boolean isRestart) {
+        if (!isRestart && billingRunRepository.findByBillingMonthAndBillingYear(month, year).isPresent()) {
+            throw new InvalidDataException("Вече съществува Billing Run за този период. Използвайте Restart.");
+        }
+
+        if (isRestart) {
+            BillingRun run = billingRunRepository.findByBillingMonthAndBillingYear(month, year)
+                    .orElseThrow(() -> new InvalidDataException("Няма съществуващ процес за рестартиране."));
+            if (run.getStatus() == BillingStatus.IN_PROGRESS) {
+                throw new InvalidDataException("Процесът вече се изпълнява в момента.");
+            }
+        }
+
+        long clientCount = userRepository.countByRole(Role.CLIENT);
+        if (clientCount == 0) {
+            throw new InvalidDataException("Няма регистрирани клиенти в системата.");
+        }
+
+        List<Price> allPrices = priceRepository.findAll();
+        if (allPrices.isEmpty()) {
+            throw new InvalidDataException("Няма заредени ценови листи в системата.");
+        }
+
+        LocalDate startOfMonth = LocalDate.of(year, month, 1);
+        LocalDate endOfMonth = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
+
+        boolean hasValidTariff = allPrices.stream().anyMatch(p ->
+                !p.getStartDate().isAfter(endOfMonth) && !p.getEndDate().isBefore(startOfMonth)
+        );
+
+        if (!hasValidTariff) {
+            throw new InvalidDataException("Не е намерен валиден тарифен план за период " + month + "/" + year + ". Моля, заредете актуални цени.");
+        }
     }
 }

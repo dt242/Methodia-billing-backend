@@ -25,8 +25,8 @@ public class User {
     @Column(name = "reference_number", nullable = false, unique = true)
     private String reference;
 
-    @Column(name = "price_list")
-    private int priceListId;
+    @Column(name = "tariff_code")
+    private String tariffCode;
 
     @Column(nullable = false)
     @JsonIgnore
@@ -36,11 +36,18 @@ public class User {
     @Column(nullable = false)
     private Role role;
 
-    public User(String name, String reference, int priceListId, String password, Role role) {
+    @Column(nullable = false)
+    private boolean active = true;
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public User(String name, String reference, String tariffCode, String password, Role role) {
         this.id = generateUuid();
         this.name = name;
         this.reference = reference;
-        this.priceListId = priceListId;
+        this.tariffCode = tariffCode;
         this.password = password;
         this.role = role;
     }

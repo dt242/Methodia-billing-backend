@@ -25,10 +25,15 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({InvalidDataException.class, IllegalArgumentException.class})
     public ResponseEntity<ErrorResponse> handleBadRequest(RuntimeException ex) {
+        Object message = ex.getMessage();
+        if (ex instanceof InvalidDataException invalidDataEx && !invalidDataEx.getErrors().isEmpty()) {
+            message = invalidDataEx.getErrors();
+        }
+
         ErrorResponse error = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
                 "Bad Request",
-                ex.getMessage(),
+                message,
                 Instant.now()
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
