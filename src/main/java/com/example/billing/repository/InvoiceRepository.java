@@ -17,8 +17,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, String> {
     List<Invoice> findByDateTimeBetween(OffsetDateTime start, OffsetDateTime end);
 
     @Query("SELECT i FROM Invoice i WHERE " +
-            "(:invoiceNumber IS NULL OR LOWER(i.number) LIKE LOWER(CONCAT('%', :invoiceNumber, '%'))) AND " +
-            "(:customerName IS NULL OR LOWER(i.user.name) LIKE LOWER(CONCAT('%', :customerName, '%'))) AND " +
+            "(:invoiceNumber IS NULL OR LOWER(i.number) LIKE LOWER(CONCAT('%', CAST(:invoiceNumber AS String), '%'))) AND " +
+            "(:customerName IS NULL OR LOWER(i.user.name) LIKE LOWER(CONCAT('%', CAST(:customerName AS String), '%'))) AND " +
             "(cast(:startDate as timestamp) IS NULL OR i.dateTime >= :startDate) AND " +
             "(cast(:endDate as timestamp) IS NULL OR i.dateTime <= :endDate) AND " +
             "(:isPaid IS NULL OR i.paid = :isPaid)")
