@@ -2,6 +2,7 @@ package com.example.billing.service;
 
 import com.example.billing.model.*;
 import com.example.billing.repository.*;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -34,6 +35,7 @@ public class BillingRunService {
         this.invoiceRepository = invoiceRepository;
     }
 
+    @Async
     public void startBillingRun(int month, int year) {
         BillingRun run = new BillingRun(month, year);
         billingRunRepository.save(run);
@@ -45,7 +47,7 @@ public class BillingRunService {
 
         List<Price> frozenPrices = priceRepository.findAll();
 
-        new Thread(() -> processClients(clients, run, frozenPrices)).start();
+        processClients(clients, run, frozenPrices);
     }
 
     public void pauseBillingRun() {
