@@ -36,6 +36,7 @@ public class Invoice {
     private BigDecimal totalAmount;
 
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("lineId ASC")
     private List<Line> lines = new ArrayList<>();
 
     @Column(nullable = false)
