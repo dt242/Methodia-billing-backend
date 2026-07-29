@@ -6,6 +6,7 @@ import com.example.billing.model.FileImport;
 import com.example.billing.model.Role;
 import com.example.billing.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -29,6 +30,7 @@ public class DashboardService {
         this.fileImportRepository = fileImportRepository;
     }
 
+    @Transactional(readOnly = true)
     public DashboardStatsDto getStats() {
         long totalClients = userRepository.countByRole(Role.CLIENT);
 
