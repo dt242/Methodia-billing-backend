@@ -149,6 +149,7 @@ public class CsvParserService {
                 price.setFileImport(fileImport);
                 prices.add(price);
             }
+            validateOverlappingPrices(prices);
             priceRepository.saveAll(prices);
         } catch (InvalidDataException e) {
             throw e;
@@ -215,5 +216,34 @@ public class CsvParserService {
             }
         }
         return rows;
+    }
+
+    private void validateOverlappingPrices(List<Price> newPrices) {
+        for (int i = 0; i < newPrices.size(); i++) {
+            for (int j = i + 1; j < newPrices.size(); j++) {
+                Price p1 = newPrices.get(i);
+                Price p2 = newPrices.get(j);
+
+                if (p1.getTariffCode().equals(p2.getTariffCode()) && p1.getProduct() == p2.getProduct()) {
+                    if (!p1.getStartDate().isAfter(p2.getEndDate()) && !p1.getEndDate().isBefore(p2.getStartDate())) {
+                        throw new InvalidDataException("Overlapping Validity Period: Конфликт вътре във файла за тарифа "
+                                + p1.getTariffCode() + " (" + p1.getProduct() + ").");
+                    }
+                }
+            }
+        }
+
+        List<Price> existingPrices = priceRepository.findAll();
+
+        for (Price newPrice : newPrices) {
+            for (Price existingPrice : existingPrices) {
+                if (newPrice.getTariffCode().equals(existingPrice.getTariffCode()) && newPrice.getProduct() == existingPrice.getProduct()) {
+                    if (!newPrice.getStartDate().isAfter(existingPrice.getEndDate()) && !newPrice.getEndDate().isBefore(existingPrice.getStartDate())) {
+                        throw new InvalidDataException("Overlapping Validity Period: Конфликт със съществуваща тарифа в базата за "
+                                + newPrice.getTariffCode() + " (" + newPrice.getStartDate() + " до " + newPrice.getEndDate() + ").");
+                    }
+                }
+            }
+        }
     }
 }
