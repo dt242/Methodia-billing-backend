@@ -15,4 +15,5 @@ public interface ErrorLogRepository extends JpaRepository<ErrorLog, String> {
     void deleteByTimestampBefore(OffsetDateTime cutoffDate);
     long countByTimestampBetween(OffsetDateTime start, OffsetDateTime end);
     List<ErrorLog> findByTimestampBetween(OffsetDateTime start, OffsetDateTime end);
+    List<ErrorLog> findTop3ByOrderByTimestampDesc();
 }

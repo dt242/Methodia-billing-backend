@@ -6,4 +6,5 @@ import java.util.Optional;
 
 public interface BillingRunRepository extends JpaRepository<BillingRun, String> {
     Optional<BillingRun> findByBillingMonthAndBillingYear(int billingMonth, int billingYear);
+    Optional<BillingRun> findTopByOrderByStartTimeDesc();
 }

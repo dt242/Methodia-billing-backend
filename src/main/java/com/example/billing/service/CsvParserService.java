@@ -2,9 +2,11 @@ package com.example.billing.service;
 
 import com.example.billing.exception.InvalidDataException;
 import com.example.billing.model.*;
+import com.example.billing.repository.FileImportRepository;
 import com.example.billing.repository.PriceRepository;
 import com.example.billing.repository.ReadingRepository;
 import com.example.billing.repository.UserRepository;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,19 +27,27 @@ public class CsvParserService {
     private final UserRepository userRepository;
     private final ReadingRepository readingRepository;
     private final PriceRepository priceRepository;
+    private final FileImportRepository fileImportRepository;
     private final PasswordEncoder passwordEncoder;
 
     public CsvParserService(UserRepository userRepository, ReadingRepository readingRepository,
-                            PriceRepository priceRepository, PasswordEncoder passwordEncoder) {
+                            PriceRepository priceRepository, FileImportRepository fileImportRepository,
+                            PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.readingRepository = readingRepository;
         this.priceRepository = priceRepository;
+        this.fileImportRepository = fileImportRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional
     public void importUsers(MultipartFile file) {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+
+            User uploadedBy = getAuthenticatedUser();
+            FileImport fileImport = new FileImport(ImportType.USERS, file.getOriginalFilename(), uploadedBy, file.getBytes());
+            fileImportRepository.save(fileImport);
+
             String headerLine = reader.readLine();
             validateHeaders(headerLine, "Customer Name", "Customer ID", "Tariff Code");
 
@@ -49,7 +59,13 @@ public class CsvParserService {
                 String encodedPassword = passwordEncoder.encode(reference);
                 String tariffCode = parts[2].trim();
 
-                return new User(parts[0].trim(), reference, tariffCode, encodedPassword, Role.CLIENT);
+                return new User(
+                        parts[0].trim(),
+                        reference,
+                        tariffCode,
+                        encodedPassword,
+                        Role.CLIENT
+                );
             }).toList();
             userRepository.saveAll(users);
 
@@ -68,6 +84,11 @@ public class CsvParserService {
     @Transactional
     public void importReadings(MultipartFile file) {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+
+            User uploadedBy = getAuthenticatedUser();
+            FileImport fileImport = new FileImport(ImportType.READINGS, file.getOriginalFilename(), uploadedBy, file.getBytes());
+            fileImportRepository.save(fileImport);
+
             String headerLine = reader.readLine();
             validateHeaders(headerLine, "Customer ID", "Product", "DateTime", "Consumption");
 
@@ -99,27 +120,41 @@ public class CsvParserService {
     @Transactional
     public void importPrices(MultipartFile file) {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+
+            User uploadedBy = getAuthenticatedUser();
+            FileImport fileImport = new FileImport(ImportType.PRICES, file.getOriginalFilename(), uploadedBy, file.getBytes());
+            fileImport = fileImportRepository.save(fileImport);
+
             String headerLine = reader.readLine();
             validateHeaders(headerLine, "Tariff Code", "Price", "Valid From", "Valid To", "Product");
 
+            FileImport finalFileImport = fileImport;
             List<Price> prices = reader.lines().map(line -> {
                 String[] parts = line.split(",");
                 if (parts.length < 5) throw new InvalidDataException("Липсват данни на ред: " + line);
 
-                return new Price(
+                Price price = new Price(
                         Product.valueOf(parts[4].trim().toUpperCase()),
                         LocalDate.parse(parts[2].trim()),
                         LocalDate.parse(parts[3].trim()),
                         new BigDecimal(parts[1].trim()),
                         parts[0].trim()
                 );
+                price.setFileImport(finalFileImport);
+                return price;
             }).toList();
+
             priceRepository.saveAll(prices);
         } catch (InvalidDataException e) {
             throw e;
         } catch (Exception e) {
             throw new InvalidDataException("Грешка при четене на цените: " + e.getMessage());
         }
+    }
+
+    private User getAuthenticatedUser() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByReference(username).orElse(null);
     }
 
     private void validateHeaders(String headerLine, String... expectedHeaders) {
