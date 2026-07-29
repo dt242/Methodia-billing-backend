@@ -11,4 +11,5 @@ import java.util.List;
 public interface ReadingRepository extends JpaRepository<Reading, String> {
     List<Reading> findByStatusOrderByDateTimeAsc(ReadingStatus status);
     List<Reading> findByUserAndProductAndStatusOrderByDateTimeAsc(User user, Product product, ReadingStatus status);
+    List<Reading> findByUserOrderByDateTimeDesc(User user);
 }
