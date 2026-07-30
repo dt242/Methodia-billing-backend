@@ -11,8 +11,8 @@ import java.util.List;
 public interface AuditLogRepository extends JpaRepository<AuditLog, String> {
 
     @Query("SELECT a FROM AuditLog a WHERE " +
-            "(:username IS NULL OR LOWER(a.username) LIKE LOWER(CONCAT('%', :username, '%'))) AND " +
-            "(:module IS NULL OR LOWER(a.module) LIKE LOWER(CONCAT('%', :module, '%'))) AND " +
+            "(:username IS NULL OR LOWER(a.username) LIKE LOWER(CONCAT('%', CAST(:username AS String), '%'))) AND " +
+            "(:module IS NULL OR LOWER(a.module) LIKE LOWER(CONCAT('%', CAST(:module AS String), '%'))) AND " +
             "(cast(:startDate as timestamp) IS NULL OR a.timestamp >= :startDate) AND " +
             "(cast(:endDate as timestamp) IS NULL OR a.timestamp <= :endDate) " +
             "ORDER BY a.timestamp DESC")

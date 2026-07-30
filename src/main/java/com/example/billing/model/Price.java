@@ -1,5 +1,6 @@
 package com.example.billing.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -36,6 +37,7 @@ public class Price {
     @Column(name = "tariff_code", nullable = false)
     private String tariffCode;
 
+    @JsonIgnore
      @ManyToOne(fetch = FetchType.LAZY)
      @JoinColumn(name = "file_import_id")
      private FileImport fileImport;

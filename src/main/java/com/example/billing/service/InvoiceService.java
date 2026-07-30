@@ -85,15 +85,14 @@ public class InvoiceService {
         invoice.setUser(user);
         invoice.setTotalAmount(totalAmount);
         invoice.setPaid(false);
-        Invoice savedInvoice = invoiceRepository.save(invoice);
 
         int counter = 1;
         for (Line line : calculatedLines) {
             line.setId(Line.generateUuid());
             line.setLineId(counter++);
-            line.setInvoice(savedInvoice);
+            invoice.addLine(line);
         }
-        lineRepository.saveAll(calculatedLines);
+        Invoice savedInvoice = invoiceRepository.save(invoice);
         endReading.setInvoiced(true);
         readingRepository.save(endReading);
 
