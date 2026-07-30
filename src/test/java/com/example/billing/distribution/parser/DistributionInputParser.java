@@ -3,6 +3,8 @@ package com.example.billing.distribution.parser;
 import com.example.billing.model.Price;
 import com.example.billing.model.Product;
 import com.example.billing.model.Reading;
+import com.example.billing.model.ReadingStatus;
+import com.example.billing.model.Role;
 import com.example.billing.model.User;
 
 import java.io.BufferedReader;
@@ -24,7 +26,7 @@ public class DistributionInputParser {
         List<ReadingPair> pairs = new ArrayList<>();
         List<Price> prices = new ArrayList<>();
 
-        User dummyUser = new User("Test User", "TEST-REF", 1);
+        User dummyUser = new User("Test User", "TEST-REF", "T1", "dummy_pass", Role.CLIENT);
 
         try (BufferedReader br = new BufferedReader(new InputStreamReader(inputStream))) {
             String line;
@@ -39,8 +41,8 @@ public class DistributionInputParser {
                     OffsetDateTime endDt = OffsetDateTime.parse(parts[2]);
                     BigDecimal quantity = new BigDecimal(parts[3]);
 
-                    Reading start = new Reading(dummyUser, Product.ELEC, startDt, BigDecimal.ZERO, false);
-                    Reading end = new Reading(dummyUser, Product.ELEC, endDt, quantity, false);
+                    Reading start = new Reading(dummyUser, Product.ELEC, startDt, BigDecimal.ZERO, false, ReadingStatus.VALIDATED);
+                    Reading end = new Reading(dummyUser, Product.ELEC, endDt, quantity, false, ReadingStatus.VALIDATED);
 
                     pairs.add(new ReadingPair(start, end));
 
@@ -49,7 +51,7 @@ public class DistributionInputParser {
                     LocalDate endDt = LocalDate.parse(parts[2]);
                     BigDecimal priceVal = new BigDecimal(parts[3]);
 
-                    Price p = new Price(Product.ELEC, startDt, endDt, priceVal, 1);
+                    Price p = new Price(Product.ELEC, startDt, endDt, priceVal, "T1");
                     prices.add(p);
                 }
             }
