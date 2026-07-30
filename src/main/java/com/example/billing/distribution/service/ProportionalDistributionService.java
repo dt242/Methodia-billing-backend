@@ -32,11 +32,12 @@ public class ProportionalDistributionService {
 
         if (totalDays <= 0) return result;
 
-        prices.sort(Comparator.comparing(Price::getStartDate));
+        List<Price> mutablePrices = new ArrayList<>(prices);
+        mutablePrices.sort(Comparator.comparing(Price::getStartDate));
 
         List<PeriodData> periods = new ArrayList<>();
 
-        for (Price price : prices) {
+        for (Price price : mutablePrices) {
             LocalDate pStartDate = price.getStartDate();
             LocalDate pEndDate = price.getEndDate();
 
