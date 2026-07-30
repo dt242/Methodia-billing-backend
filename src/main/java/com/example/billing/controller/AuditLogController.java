@@ -1,7 +1,7 @@
 package com.example.billing.controller;
 
 import com.example.billing.model.AuditLog;
-import com.example.billing.repository.AuditLogRepository;
+import com.example.billing.service.AuditService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,10 +14,10 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class AuditLogController {
 
-    private final AuditLogRepository auditLogRepository;
+    private final AuditService auditService;
 
-    public AuditLogController(AuditLogRepository auditLogRepository) {
-        this.auditLogRepository = auditLogRepository;
+    public AuditLogController(AuditService auditService) {
+        this.auditService = auditService;
     }
 
     @GetMapping
@@ -27,7 +27,6 @@ public class AuditLogController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endDate) {
 
-        List<AuditLog> logs = auditLogRepository.findWithFilters(username, module, startDate, endDate);
-        return ResponseEntity.ok(logs);
+        return ResponseEntity.ok(auditService.getAuditLogs(username, module, startDate, endDate));
     }
 }

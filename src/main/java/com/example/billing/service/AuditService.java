@@ -6,6 +6,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.time.OffsetDateTime;
+import java.util.List;
+
 @Service
 public class AuditService {
 
@@ -25,5 +28,9 @@ public class AuditService {
 
         AuditLog log = new AuditLog(username, module, action);
         auditLogRepository.save(log);
+    }
+
+    public List<AuditLog> getAuditLogs(String username, String module, OffsetDateTime startDate, OffsetDateTime endDate) {
+        return auditLogRepository.findWithFilters(username, module, startDate, endDate);
     }
 }

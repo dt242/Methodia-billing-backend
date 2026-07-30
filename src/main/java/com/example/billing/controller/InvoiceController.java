@@ -1,11 +1,7 @@
 package com.example.billing.controller;
 
-import com.example.billing.exception.ResourceNotFoundException;
 import com.example.billing.model.Invoice;
-import com.example.billing.repository.InvoiceRepository;
-import com.example.billing.service.AuditService;
 import com.example.billing.service.InvoiceService;
-import com.example.billing.service.PdfGenerationService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -25,15 +21,9 @@ import java.time.OffsetDateTime;
 @CrossOrigin(origins = "*")
 public class InvoiceController {
 
-    private final InvoiceRepository invoiceRepository;
-    private final PdfGenerationService pdfGenerationService;
-    private final AuditService auditService;
     private final InvoiceService invoiceService;
 
-    public InvoiceController(InvoiceRepository invoiceRepository, PdfGenerationService pdfGenerationService, AuditService auditService, InvoiceService invoiceService) {
-        this.invoiceRepository = invoiceRepository;
-        this.pdfGenerationService = pdfGenerationService;
-        this.auditService = auditService;
+    public InvoiceController(InvoiceService invoiceService) {
         this.invoiceService = invoiceService;
     }
 
@@ -46,28 +36,19 @@ public class InvoiceController {
             @RequestParam(required = false) Boolean isPaid,
             @PageableDefault(size = 20, sort = "dateTime") Pageable pageable) {
 
-        Page<Invoice> invoices = invoiceRepository.findWithFilters(invoiceNumber, customerName, startDate, endDate, isPaid, pageable);
-        auditService.logAction("Invoices", "Admin viewed invoices list with filters");
-        return ResponseEntity.ok(invoices);
+        return ResponseEntity.ok(invoiceService.getInvoices(invoiceNumber, customerName, startDate, endDate, isPaid, pageable));
     }
 
     @GetMapping("/{id}/pdf")
     public ResponseEntity<byte[]> downloadInvoicePdf(@PathVariable String id) {
-        Invoice invoice = invoiceRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Фактурата не е намерена"));
-
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         boolean isAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
 
-        if (!isAdmin && !invoice.getUser().getReference().equals(auth.getName())) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
-        byte[] pdfBytes = pdfGenerationService.generateInvoicePdf(invoice);
+        byte[] pdfBytes = invoiceService.generatePdfForInvoice(id, auth.getName(), isAdmin);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
-        headers.setContentDispositionFormData("attachment", "invoice_" + invoice.getNumber() + ".pdf");
+        headers.setContentDispositionFormData("attachment", "invoice_" + id + ".pdf");
 
         return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
     }
@@ -76,11 +57,11 @@ public class InvoiceController {
     public ResponseEntity<Invoice> regenerateInvoice(@PathVariable String id) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         boolean isAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
         if (!isAdmin) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        Invoice newInvoice = invoiceService.regenerateInvoice(id);
-        auditService.logAction("Invoices", "Regenerated invoice. Old ID: " + id + ", New ID: " + newInvoice.getId());
-        return ResponseEntity.ok(newInvoice);
+
+        return ResponseEntity.ok(invoiceService.regenerateInvoice(id));
     }
 }

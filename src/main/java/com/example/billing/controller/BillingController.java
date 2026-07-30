@@ -2,14 +2,11 @@ package com.example.billing.controller;
 
 import com.example.billing.dto.BillingRequest;
 import com.example.billing.model.Invoice;
-import com.example.billing.repository.InvoiceRepository;
 import com.example.billing.service.InvoiceService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/billing")
@@ -17,11 +14,9 @@ import java.util.List;
 public class BillingController {
 
     private final InvoiceService invoiceService;
-    private final InvoiceRepository invoiceRepository;
 
-    public BillingController(InvoiceService invoiceService, InvoiceRepository invoiceRepository) {
+    public BillingController(InvoiceService invoiceService) {
         this.invoiceService = invoiceService;
-        this.invoiceRepository = invoiceRepository;
     }
 
     @PostMapping("/invoice")
