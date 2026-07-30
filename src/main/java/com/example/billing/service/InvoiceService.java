@@ -9,6 +9,8 @@ import com.example.billing.repository.LineRepository;
 import com.example.billing.repository.PriceRepository;
 import com.example.billing.repository.ReadingRepository;
 import com.example.billing.repository.UserRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,20 +26,22 @@ public class InvoiceService {
     private final PriceRepository priceRepository;
     private final ProportionalDistributionService distributionService;
     private final InvoiceRepository invoiceRepository;
-    private final LineRepository lineRepository;
     private final InvoiceNumberGenerator numberGenerator;
+    private final PdfGenerationService pdfGenerationService;
+    private final AuditService auditService;
 
     public InvoiceService(UserRepository userRepository, ReadingRepository readingRepository,
                           PriceRepository priceRepository, ProportionalDistributionService distributionService,
-                          InvoiceRepository invoiceRepository, LineRepository lineRepository,
-                          InvoiceNumberGenerator numberGenerator) {
+                          InvoiceRepository invoiceRepository,
+                          InvoiceNumberGenerator numberGenerator, PdfGenerationService pdfGenerationService, AuditService auditService) {
         this.userRepository = userRepository;
         this.readingRepository = readingRepository;
         this.priceRepository = priceRepository;
         this.distributionService = distributionService;
         this.invoiceRepository = invoiceRepository;
-        this.lineRepository = lineRepository;
         this.numberGenerator = numberGenerator;
+        this.pdfGenerationService = pdfGenerationService;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -132,5 +136,21 @@ public class InvoiceService {
         List<Price> currentPrices = priceRepository.findAll();
 
         return generateInvoice(user, startReading, endReading, currentPrices);
+    }
+
+    public Page<Invoice> getInvoices(String invoiceNumber, String customerName, OffsetDateTime startDate, OffsetDateTime endDate, Boolean isPaid, Pageable pageable) {
+        auditService.logAction("Invoices", "Admin viewed invoices list with filters");
+        return invoiceRepository.findWithFilters(invoiceNumber, customerName, startDate, endDate, isPaid, pageable);
+    }
+
+    public byte[] generatePdfForInvoice(String invoiceId, String username, boolean isAdmin) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Фактурата не е намерена"));
+
+        if (!isAdmin && !invoice.getUser().getReference().equals(username)) {
+            throw new IllegalArgumentException("Нямате достъп до тази фактура.");
+        }
+
+        return pdfGenerationService.generateInvoicePdf(invoice);
     }
 }
